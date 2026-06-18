@@ -2,6 +2,17 @@ import { GAME_CONFIG, COLORS } from '../config';
 import { Physics } from '../engine/Physics';
 import { Velocity, PlayerState } from '../types';
 
+export interface PlatformLike {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isMoving?: boolean;
+  getVelocityX?(): number;
+  getVelocityY?(): number;
+  isHorizontal?(): boolean;
+}
+
 export class Player {
   x: number;
   y: number;
@@ -10,6 +21,7 @@ export class Player {
   velocity: Velocity;
   state: PlayerState;
   isOnGround: boolean;
+  currentPlatform: PlatformLike | null;
   animFrame: number;
   animTimer: number;
   readonly frameCount = 4;
@@ -23,6 +35,7 @@ export class Player {
     this.velocity = { vx: 0, vy: 0 };
     this.state = 'running';
     this.isOnGround = false;
+    this.currentPlatform = null;
     this.animFrame = 0;
     this.animTimer = 0;
   }

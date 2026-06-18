@@ -9,6 +9,10 @@ export class MovingPlatform extends Platform {
   private time: number = 0;
   private horizontalMove: boolean;
   private baseX: number;
+  private prevOffsetX: number = 0;
+  private prevOffsetY: number = 0;
+  private deltaX: number = 0;
+  private deltaY: number = 0;
 
   constructor(
     x: number,
@@ -31,12 +35,22 @@ export class MovingPlatform extends Platform {
     const offset = Math.sin(this.time * this.moveSpeed) * this.moveRange;
     
     if (this.horizontalMove) {
+      const newOffset = offset;
+      this.deltaX = newOffset - this.prevOffsetX;
+      this.prevOffsetX = newOffset;
+      this.deltaY = 0;
+      
       this.baseX -= gameSpeed * deltaTime;
-      this.x = this.baseX + offset;
+      this.x = this.baseX + newOffset;
     } else {
+      const newOffset = offset;
+      this.deltaY = newOffset - this.prevOffsetY;
+      this.prevOffsetY = newOffset;
+      this.deltaX = 0;
+      
       this.x -= gameSpeed * deltaTime;
       this.baseX = this.x;
-      this.y = this.baseY + offset;
+      this.y = this.baseY + newOffset;
     }
   }
 
@@ -76,12 +90,15 @@ export class MovingPlatform extends Platform {
     ctx.setLineDash([]);
   }
 
+  getVelocityX(): number {
+    return this.deltaX;
+  }
+
   getVelocityY(): number {
-    if (!this.horizontalMove) {
-      const prevOffset = Math.sin((this.time - 1) * this.moveSpeed) * this.moveRange;
-      const currOffset = Math.sin(this.time * this.moveSpeed) * this.moveRange;
-      return currOffset - prevOffset;
-    }
-    return 0;
+    return this.deltaY;
+  }
+
+  isHorizontal(): boolean {
+    return this.horizontalMove;
   }
 }

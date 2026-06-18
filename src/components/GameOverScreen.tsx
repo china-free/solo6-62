@@ -57,7 +57,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
               奔跑距离
             </p>
             <p 
-              className="text-2xl font-bold"
+              className="text-xl font-bold"
               style={{
                 fontFamily: '"Press Start 2P", monospace',
                 color: COLORS.TEXT,
@@ -78,13 +78,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
               收集金币
             </p>
             <p 
-              className="text-xl font-bold"
+              className="text-lg font-bold"
               style={{
                 fontFamily: '"Press Start 2P", monospace',
                 color: COLORS.COIN,
               }}
             >
-              {coins}
+              {coins} 枚 (+{coins * 10}分)
             </p>
           </div>
 
@@ -96,13 +96,35 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                 color: COLORS.TEXT_SECONDARY,
               }}
             >
-              最高分
+              总分
             </p>
             <p 
-              className="text-xl font-bold"
+              className="text-2xl font-bold"
               style={{
                 fontFamily: '"Press Start 2P", monospace',
                 color: COLORS.BUTTON,
+                textShadow: `0 0 8px ${COLORS.BUTTON}`,
+              }}
+            >
+              {score + coins * 10}
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <p 
+              className="text-xs mb-1"
+              style={{
+                fontFamily: '"Press Start 2P", monospace',
+                color: COLORS.TEXT_SECONDARY,
+              }}
+            >
+              历史最高
+            </p>
+            <p 
+              className="text-lg font-bold"
+              style={{
+                fontFamily: '"Press Start 2P", monospace',
+                color: COLORS.TEXT,
               }}
             >
               {highScore}

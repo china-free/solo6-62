@@ -201,18 +201,26 @@ export const Game: React.FC = () => {
           }
 
           if (state.player) {
-            state.player.update(deltaTime);
-            state.player.isOnGround = false;
+            const prevPlatform = state.player.currentPlatform;
+            const wasOnGround = state.player.isOnGround;
 
             for (const platform of state.platforms) {
               platform.update(deltaTime, state.gameSpeed);
+            }
 
+            if (prevPlatform && prevPlatform instanceof MovingPlatform && wasOnGround) {
+              state.player.x += prevPlatform.getVelocityX();
+              state.player.y += prevPlatform.getVelocityY();
+            }
+
+            state.player.update(deltaTime);
+            state.player.isOnGround = false;
+            state.player.currentPlatform = null;
+
+            for (const platform of state.platforms) {
               if (Collision.checkTopCollision(state.player.getBounds(), state.player.velocity.vy, platform.getBounds())) {
-                let platformY = platform.y;
-                if (platform instanceof MovingPlatform) {
-                  platformY += platform.getVelocityY();
-                }
-                state.player.land(platformY);
+                state.player.land(platform.y);
+                state.player.currentPlatform = platform;
                 break;
               }
             }
@@ -260,7 +268,7 @@ export const Game: React.FC = () => {
 
           setUiState((prev) => ({
             ...prev,
-            score: state.score + state.coins * 10,
+            score: state.score,
             coins: state.coins,
             gameSpeed: state.gameSpeed,
           }));
