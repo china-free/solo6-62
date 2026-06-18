@@ -1,7 +1,9 @@
 import { GAME_CONFIG, COLORS } from '../config';
 import { Platform } from './Platform';
+import { EntityType, Bounds } from '../types';
 
 export class MovingPlatform extends Platform {
+  readonly type: EntityType = EntityType.MOVING_PLATFORM;
   readonly isMoving: boolean = true;
   private baseY: number;
   private moveRange: number;
@@ -55,8 +57,8 @@ export class MovingPlatform extends Platform {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const x = Math.floor(this.x);
-    const y = Math.floor(this.y);
+    const x = this.floor(this.x);
+    const y = this.floor(this.y);
     
     ctx.fillStyle = COLORS.PLATFORM_MOVING_DARK;
     ctx.fillRect(x, y + 4, this.width, this.height - 4);
@@ -100,5 +102,14 @@ export class MovingPlatform extends Platform {
 
   isHorizontal(): boolean {
     return this.horizontalMove;
+  }
+
+  getBounds(): Bounds {
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    };
   }
 }

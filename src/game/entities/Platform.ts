@@ -1,26 +1,22 @@
 import { GAME_CONFIG, COLORS } from '../config';
+import { GameEntity } from './GameEntity';
+import { EntityType, Bounds } from '../types';
 
-export class Platform {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+export class Platform extends GameEntity {
+  readonly type: EntityType = EntityType.PLATFORM;
   readonly isMoving: boolean = false;
 
   constructor(x: number, y: number, width: number) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = GAME_CONFIG.PLATFORM_HEIGHT;
+    super(x, y, width, GAME_CONFIG.PLATFORM_HEIGHT);
   }
 
   update(deltaTime: number, gameSpeed: number): void {
-    this.x -= gameSpeed * deltaTime;
+    this.moveWithSpeed(deltaTime, gameSpeed);
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const x = Math.floor(this.x);
-    const y = Math.floor(this.y);
+    const x = this.floor(this.x);
+    const y = this.floor(this.y);
     
     ctx.fillStyle = COLORS.PLATFORM_DARK;
     ctx.fillRect(x, y + 4, this.width, this.height - 4);
@@ -40,11 +36,7 @@ export class Platform {
     }
   }
 
-  isOffScreen(): boolean {
-    return this.x + this.width < 0;
-  }
-
-  getBounds() {
+  getBounds(): Bounds {
     return {
       x: this.x,
       y: this.y,

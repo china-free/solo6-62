@@ -1,4 +1,4 @@
-import { Position } from '../types';
+import { Bounds, CollisionResult, CollisionType, IGameEntity, EntityType } from '../types';
 
 export interface Collidable {
   x: number;
@@ -59,9 +59,65 @@ export class Collision {
     return y > screenHeight + height;
   }
 
-  static getDistance(a: Position, b: Position): number {
+  static getDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  static checkPlatformCollision(
+    player: Collidable,
+    playerVy: number,
+    platforms: IGameEntity[]
+  ): CollisionResult {
+    for (const platform of platforms) {
+      if (
+        platform.type === EntityType.PLATFORM ||
+        platform.type === EntityType.MOVING_PLATFORM
+      ) {
+        if (this.checkTopCollision(player, playerVy, platform.getBounds())) {
+          return {
+            type: CollisionType.LAND,
+            entity: platform,
+          };
+        }
+      }
+    }
+    return { type: CollisionType.NONE };
+  }
+
+  static checkHazardCollision(
+    player: Collidable,
+    hazards: IGameEntity[]
+  ): CollisionResult {
+    for (const hazard of hazards) {
+      if (hazard.type === EntityType.SPIKE) {
+        if (this.checkSpikeCollision(player, hazard.getBounds())) {
+          return {
+            type: CollisionType.DEATH,
+            entity: hazard,
+          };
+        }
+      }
+    }
+    return { type: CollisionType.NONE };
+  }
+
+  static checkCollectibleCollision(
+    player: Collidable,
+    collectibles: IGameEntity[]
+  ): CollisionResult {
+    for (const collectible of collectibles) {
+      if (collectible.type === EntityType.COIN) {
+        const coin = collectible as unknown as { collected: boolean };
+        if (!coin.collected && this.checkCoinCollision(player, collectible.getBounds())) {
+          return {
+            type: CollisionType.COLLECT,
+            entity: collectible,
+          };
+        }
+      }
+    }
+    return { type: CollisionType.NONE };
   }
 }

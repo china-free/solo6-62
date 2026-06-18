@@ -1,23 +1,11 @@
 import { GAME_CONFIG, COLORS } from '../config';
 import { Physics } from '../engine/Physics';
-import { Velocity, PlayerState } from '../types';
+import { Velocity, PlayerState, PlatformLike, Bounds } from '../types';
+import { GameEntity } from './GameEntity';
+import { EntityType } from '../types';
 
-export interface PlatformLike {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  isMoving?: boolean;
-  getVelocityX?(): number;
-  getVelocityY?(): number;
-  isHorizontal?(): boolean;
-}
-
-export class Player {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+export class Player extends GameEntity {
+  readonly type: EntityType = EntityType.PLAYER;
   velocity: Velocity;
   state: PlayerState;
   isOnGround: boolean;
@@ -28,10 +16,7 @@ export class Player {
   readonly frameDelay = 8;
 
   constructor(x: number, y: number) {
-    this.x = x;
-    this.y = y;
-    this.width = GAME_CONFIG.PLAYER_WIDTH;
-    this.height = GAME_CONFIG.PLAYER_HEIGHT;
+    super(x, y, GAME_CONFIG.PLAYER_WIDTH, GAME_CONFIG.PLAYER_HEIGHT);
     this.velocity = { vx: 0, vy: 0 };
     this.state = 'running';
     this.isOnGround = false;
@@ -74,8 +59,8 @@ export class Player {
     const bodyColor = COLORS.PLAYER;
     const darkColor = COLORS.PLAYER_DARK;
     
-    const x = Math.floor(this.x);
-    const y = Math.floor(this.y);
+    const x = this.floor(this.x);
+    const y = this.floor(this.y);
     
     ctx.fillStyle = bodyColor;
     
@@ -159,12 +144,16 @@ export class Player {
     this.state = 'running';
   }
 
-  getBounds() {
+  getBounds(): Bounds {
     return {
       x: this.x,
       y: this.y,
       width: this.width,
       height: this.height,
     };
+  }
+
+  isOffScreen(): boolean {
+    return false;
   }
 }

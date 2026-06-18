@@ -1,32 +1,28 @@
 import { GAME_CONFIG, COLORS } from '../config';
+import { GameEntity } from './GameEntity';
+import { EntityType, Bounds } from '../types';
 
-export class Coin {
-  x: number;
-  y: number;
+export class Coin extends GameEntity {
+  readonly type: EntityType = EntityType.COIN;
   size: number;
-  width: number;
-  height: number;
   collected: boolean = false;
   private animTime: number = 0;
 
   constructor(x: number, y: number) {
-    this.x = x;
-    this.y = y;
+    super(x, y, GAME_CONFIG.COIN_SIZE, GAME_CONFIG.COIN_SIZE);
     this.size = GAME_CONFIG.COIN_SIZE;
-    this.width = this.size;
-    this.height = this.size;
   }
 
   update(deltaTime: number, gameSpeed: number): void {
-    this.x -= gameSpeed * deltaTime;
+    this.moveWithSpeed(deltaTime, gameSpeed);
     this.animTime += deltaTime * 0.1;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
     if (this.collected) return;
     
-    const x = Math.floor(this.x);
-    const y = Math.floor(this.y);
+    const x = this.floor(this.x);
+    const y = this.floor(this.y);
     const size = this.size;
     const centerX = x + size / 2;
     const centerY = y + size / 2;
@@ -63,15 +59,15 @@ export class Coin {
     ctx.restore();
   }
 
-  isOffScreen(): boolean {
-    return this.x + this.width < 0;
-  }
-
   collect(): void {
     this.collected = true;
   }
 
-  getBounds() {
+  isOffScreen(): boolean {
+    return this.x + this.width < 0 || this.collected;
+  }
+
+  getBounds(): Bounds {
     return {
       x: this.x,
       y: this.y,

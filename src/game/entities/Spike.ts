@@ -1,27 +1,23 @@
 import { GAME_CONFIG, COLORS } from '../config';
+import { GameEntity } from './GameEntity';
+import { EntityType, Bounds } from '../types';
 
-export class Spike {
-  x: number;
-  y: number;
+export class Spike extends GameEntity {
+  readonly type: EntityType = EntityType.SPIKE;
   size: number;
-  width: number;
-  height: number;
 
   constructor(x: number, y: number) {
-    this.x = x;
-    this.y = y;
+    super(x, y, GAME_CONFIG.SPIKE_SIZE, GAME_CONFIG.SPIKE_SIZE);
     this.size = GAME_CONFIG.SPIKE_SIZE;
-    this.width = this.size;
-    this.height = this.size;
   }
 
   update(deltaTime: number, gameSpeed: number): void {
-    this.x -= gameSpeed * deltaTime;
+    this.moveWithSpeed(deltaTime, gameSpeed);
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const x = Math.floor(this.x);
-    const y = Math.floor(this.y);
+    const x = this.floor(this.x);
+    const y = this.floor(this.y);
     const size = this.size;
     
     ctx.fillStyle = COLORS.SPIKE_DARK;
@@ -49,11 +45,7 @@ export class Spike {
     ctx.fill();
   }
 
-  isOffScreen(): boolean {
-    return this.x + this.width < 0;
-  }
-
-  getBounds() {
+  getBounds(): Bounds {
     return {
       x: this.x + 4,
       y: this.y + 4,

@@ -1,44 +1,31 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GAME_CONFIG } from '../game/config';
-import { GameStatus } from '../game/types';
-import { Player } from '../game/entities/Player';
-import { Platform } from '../game/entities/Platform';
-import { MovingPlatform } from '../game/entities/MovingPlatform';
-import { Spike } from '../game/entities/Spike';
-import { Coin } from '../game/entities/Coin';
-import { Background } from '../game/engine/Background';
-import { ParticleSystem } from '../game/engine/ParticleSystem';
-import { LevelGenerator, PlatformType } from '../game/engine/LevelGenerator';
-import { Collision } from '../game/engine/Collision';
-import { getHighScore, updateHighScore } from '../utils/storage';
+import { GameStatus, IGameEntity } from '../game/types';
+import { Player, Platform, MovingPlatform, Spike, Coin } from '../game/entities';
+import { Background, ParticleSystem, LevelGenerator, Collision } from '../game/engine';
+import { ScoreManager, StorageManager } from '../game/managers';
 import { StartScreen } from './StartScreen';
 import { GameOverScreen } from './GameOverScreen';
 import { HUD } from './HUD';
 
 export const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const storageManager = StorageManager.getInstance();
+
   const gameStateRef = useRef<{
     status: GameStatus;
-    score: number;
-    coins: number;
-    highScore: number;
-    gameSpeed: number;
     player: Player | null;
-    platforms: PlatformType[];
+    platforms: (Platform | MovingPlatform)[];
     spikes: Spike[];
     coinsArr: Coin[];
     background: Background;
     particles: ParticleSystem;
     levelGenerator: LevelGenerator;
+    scoreManager: ScoreManager;
     animationId: number | null;
     lastTime: number;
-    scoreAccumulator: number;
   }>({
     status: 'menu',
-    score: 0,
-    coins: 0,
-    highScore: 0,
-    gameSpeed: GAME_CONFIG.BASE_SPEED,
     player: null,
     platforms: [],
     spikes: [],
@@ -46,26 +33,38 @@ export const Game: React.FC = () => {
     background: new Background(),
     particles: new ParticleSystem(),
     levelGenerator: new LevelGenerator(),
+    scoreManager: new ScoreManager(),
     animationId: null,
     lastTime: 0,
-    scoreAccumulator: 0,
   });
 
   const [uiState, setUiState] = useState<{
     status: GameStatus;
-    score: number;
+    distance: number;
     coins: number;
+    totalScore: number;
     highScore: number;
     gameSpeed: number;
     isNewHighScore: boolean;
   }>({
     status: 'menu',
-    score: 0,
+    distance: 0,
     coins: 0,
+    totalScore: 0,
     highScore: 0,
     gameSpeed: GAME_CONFIG.BASE_SPEED,
     isNewHighScore: false,
   });
+
+  const updateEntities = useCallback((entities: IGameEntity[], deltaTime: number, gameSpeed: number): void => {
+    for (const entity of entities) {
+      entity.update(deltaTime, gameSpeed);
+    }
+  }, []);
+
+  const filterOffScreenEntities = useCallback(<T extends IGameEntity>(entities: T[]): T[] => {
+    return entities.filter((e) => !e.isOffScreen());
+  }, []);
 
   const initGame = useCallback(() => {
     const state = gameStateRef.current;
@@ -78,11 +77,8 @@ export const Game: React.FC = () => {
     state.spikes = [];
     state.coinsArr = [];
     state.particles.clear();
-    state.score = 0;
-    state.coins = 0;
-    state.gameSpeed = GAME_CONFIG.BASE_SPEED;
-    state.scoreAccumulator = 0;
-    state.highScore = getHighScore();
+    state.scoreManager.reset();
+    state.scoreManager.setHighScore(storageManager.getHighScore());
 
     state.platforms.forEach((platform) => {
       const spikes = state.levelGenerator.generateSpikes(platform);
@@ -90,17 +86,19 @@ export const Game: React.FC = () => {
       state.spikes.push(...spikes);
       state.coinsArr.push(...coins);
     });
-  }, []);
+  }, [storageManager]);
 
   const startGame = useCallback(() => {
     initGame();
     gameStateRef.current.status = 'playing';
+    const sm = gameStateRef.current.scoreManager;
     setUiState((prev) => ({
       ...prev,
       status: 'playing',
-      score: 0,
-      coins: 0,
-      highScore: gameStateRef.current.highScore,
+      distance: sm.getDistance(),
+      coins: sm.getCoins(),
+      totalScore: sm.getTotalScore(),
+      highScore: sm.getHighScore(),
       gameSpeed: GAME_CONFIG.BASE_SPEED,
       isNewHighScore: false,
     }));
@@ -111,23 +109,26 @@ export const Game: React.FC = () => {
     state.status = 'gameover';
     
     if (state.player) {
-      state.particles.emitDeath(state.player.x + state.player.width / 2, state.player.y + state.player.height / 2);
+      state.particles.emitDeath(
+        state.player.x + state.player.width / 2,
+        state.player.y + state.player.height / 2
+      );
     }
 
-    const finalScore = state.score + state.coins * 10;
-    const newHighScore = updateHighScore(finalScore);
-    const isNewHighScore = finalScore > state.highScore;
+    const finalScore = state.scoreManager.getTotalScore();
+    const { highScore, isNewRecord } = storageManager.updateHighScore(finalScore);
+    state.scoreManager.setHighScore(highScore);
 
     setUiState((prev) => ({
       ...prev,
       status: 'gameover',
-      score: finalScore,
-      highScore: newHighScore,
-      isNewHighScore,
+      distance: state.scoreManager.getDistance(),
+      coins: state.scoreManager.getCoins(),
+      totalScore: finalScore,
+      highScore: highScore,
+      isNewHighScore: isNewRecord,
     }));
-
-    gameStateRef.current.highScore = newHighScore;
-  }, []);
+  }, [storageManager]);
 
   const goToMenu = useCallback(() => {
     gameStateRef.current.status = 'menu';
@@ -163,9 +164,71 @@ export const Game: React.FC = () => {
   }, [handleJump]);
 
   useEffect(() => {
+    const highScore = storageManager.getHighScore();
+    gameStateRef.current.scoreManager.setHighScore(highScore);
+    setUiState((prev) => ({ ...prev, highScore }));
+  }, [storageManager]);
+
+  const handlePlatformCollisions = useCallback((player: Player): void => {
     const state = gameStateRef.current;
-    state.highScore = getHighScore();
-    setUiState((prev) => ({ ...prev, highScore: state.highScore }));
+    for (const platform of state.platforms) {
+      if (Collision.checkTopCollision(player.getBounds(), player.velocity.vy, platform.getBounds())) {
+        player.land(platform.y);
+        player.currentPlatform = platform;
+        break;
+      }
+    }
+  }, []);
+
+  const handleSpikeCollisions = useCallback((player: Player): boolean => {
+    const state = gameStateRef.current;
+    for (const spike of state.spikes) {
+      if (Collision.checkSpikeCollision(player.getBounds(), spike.getBounds())) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  const handleCoinCollisions = useCallback((player: Player): number => {
+    const state = gameStateRef.current;
+    let collected = 0;
+    for (const coin of state.coinsArr) {
+      if (coin.collected) continue;
+      if (Collision.checkCoinCollision(player.getBounds(), coin.getBounds())) {
+        coin.collect();
+        collected++;
+        state.particles.emitCoinCollect(
+          coin.x + coin.width / 2,
+          coin.y + coin.height / 2
+        );
+      }
+    }
+    return collected;
+  }, []);
+
+  const followMovingPlatform = useCallback((player: Player): void => {
+    const prevPlatform = player.currentPlatform;
+    const wasOnGround = player.isOnGround;
+
+    if (prevPlatform && prevPlatform instanceof MovingPlatform && wasOnGround) {
+      player.x += prevPlatform.getVelocityX();
+      player.y += prevPlatform.getVelocityY();
+    }
+  }, []);
+
+  const generateNewEntities = useCallback((): void => {
+    const state = gameStateRef.current;
+    while (state.levelGenerator.shouldGenerateNewPlatform()) {
+      const newPlatform = state.levelGenerator.generateNextPlatform();
+      if (newPlatform) {
+        state.platforms.push(newPlatform);
+        const spikes = state.levelGenerator.generateSpikes(newPlatform);
+        const coins = state.levelGenerator.generateCoins(newPlatform);
+        state.spikes.push(...spikes);
+        state.coinsArr.push(...coins);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -183,100 +246,61 @@ export const Game: React.FC = () => {
 
       ctx.imageSmoothingEnabled = false;
 
-      state.background.update(deltaTime, state.gameSpeed);
+      state.background.update(deltaTime, state.scoreManager.calculateGameSpeed());
       state.background.render(ctx);
 
       if (state.status === 'playing' || state.status === 'gameover') {
-        if (state.status === 'playing') {
-          state.gameSpeed = Math.min(
-            GAME_CONFIG.BASE_SPEED + state.score * GAME_CONFIG.SPEED_INCREMENT,
-            GAME_CONFIG.MAX_SPEED
-          );
-          state.levelGenerator.setDifficulty(state.score);
+        if (state.status === 'playing' && state.player) {
+          const gameSpeed = state.scoreManager.calculateGameSpeed();
+          state.levelGenerator.setDifficulty(state.scoreManager.getDistance());
 
-          state.scoreAccumulator += state.gameSpeed * deltaTime;
-          if (state.scoreAccumulator >= 10) {
-            state.score += Math.floor(state.scoreAccumulator / 10);
-            state.scoreAccumulator = state.scoreAccumulator % 10;
+          state.scoreManager.addDistance(gameSpeed, deltaTime);
+
+          const player = state.player;
+
+          updateEntities(state.platforms as unknown as IGameEntity[], deltaTime, gameSpeed);
+
+          followMovingPlatform(player);
+
+          player.update(deltaTime);
+          player.isOnGround = false;
+          player.currentPlatform = null;
+
+          handlePlatformCollisions(player);
+
+          updateEntities(state.spikes as unknown as IGameEntity[], deltaTime, gameSpeed);
+          if (handleSpikeCollisions(player)) {
+            endGame();
           }
 
-          if (state.player) {
-            const prevPlatform = state.player.currentPlatform;
-            const wasOnGround = state.player.isOnGround;
-
-            for (const platform of state.platforms) {
-              platform.update(deltaTime, state.gameSpeed);
-            }
-
-            if (prevPlatform && prevPlatform instanceof MovingPlatform && wasOnGround) {
-              state.player.x += prevPlatform.getVelocityX();
-              state.player.y += prevPlatform.getVelocityY();
-            }
-
-            state.player.update(deltaTime);
-            state.player.isOnGround = false;
-            state.player.currentPlatform = null;
-
-            for (const platform of state.platforms) {
-              if (Collision.checkTopCollision(state.player.getBounds(), state.player.velocity.vy, platform.getBounds())) {
-                state.player.land(platform.y);
-                state.player.currentPlatform = platform;
-                break;
-              }
-            }
-
-            for (const spike of state.spikes) {
-              spike.update(deltaTime, state.gameSpeed);
-              if (Collision.checkSpikeCollision(state.player.getBounds(), spike.getBounds())) {
-                endGame();
-                break;
-              }
-            }
-
-            for (const coin of state.coinsArr) {
-              if (coin.collected) continue;
-              coin.update(deltaTime, state.gameSpeed);
-              if (Collision.checkCoinCollision(state.player.getBounds(), coin.getBounds())) {
-                coin.collect();
-                state.coins++;
-                state.particles.emitCoinCollect(
-                  coin.x + coin.width / 2,
-                  coin.y + coin.height / 2
-                );
-              }
-            }
-
-            if (Collision.isBelowScreen(state.player.y, state.player.height, GAME_CONFIG.CANVAS_HEIGHT)) {
-              endGame();
-            }
+          updateEntities(state.coinsArr as unknown as IGameEntity[], deltaTime, gameSpeed);
+          const coinsCollected = handleCoinCollisions(player);
+          for (let i = 0; i < coinsCollected; i++) {
+            state.scoreManager.addCoin();
           }
 
-          state.platforms = state.platforms.filter((p) => !p.isOffScreen());
-          state.spikes = state.spikes.filter((s) => !s.isOffScreen());
-          state.coinsArr = state.coinsArr.filter((c) => !c.isOffScreen() || c.collected);
-
-          while (state.levelGenerator.shouldGenerateNewPlatform()) {
-            const newPlatform = state.levelGenerator.generateNextPlatform();
-            if (newPlatform) {
-              state.platforms.push(newPlatform);
-              const spikes = state.levelGenerator.generateSpikes(newPlatform);
-              const coins = state.levelGenerator.generateCoins(newPlatform);
-              state.spikes.push(...spikes);
-              state.coinsArr.push(...coins);
-            }
+          if (Collision.isBelowScreen(player.y, player.height, GAME_CONFIG.CANVAS_HEIGHT)) {
+            endGame();
           }
+
+          state.platforms = filterOffScreenEntities(state.platforms as unknown as IGameEntity[]) as (Platform | MovingPlatform)[];
+          state.spikes = filterOffScreenEntities(state.spikes as unknown as IGameEntity[]) as Spike[];
+          state.coinsArr = filterOffScreenEntities(state.coinsArr as unknown as IGameEntity[]) as Coin[];
+
+          generateNewEntities();
 
           setUiState((prev) => ({
             ...prev,
-            score: state.score,
-            coins: state.coins,
-            gameSpeed: state.gameSpeed,
+            distance: state.scoreManager.getDistance(),
+            coins: state.scoreManager.getCoins(),
+            totalScore: state.scoreManager.getTotalScore(),
+            gameSpeed: gameSpeed,
           }));
         }
 
         state.particles.update(deltaTime);
 
-        state.background.renderGround(ctx, state.gameSpeed);
+        state.background.renderGround(ctx, state.scoreManager.calculateGameSpeed());
 
         state.platforms.forEach((platform) => platform.render(ctx));
         state.spikes.forEach((spike) => spike.render(ctx));
@@ -299,7 +323,7 @@ export const Game: React.FC = () => {
         cancelAnimationFrame(state.animationId);
       }
     };
-  }, [endGame]);
+  }, [endGame, updateEntities, filterOffScreenEntities, followMovingPlatform, handlePlatformCollisions, handleSpikeCollisions, handleCoinCollisions, generateNewEntities]);
 
   const handleCanvasClick = () => {
     if (uiState.status === 'playing') {
@@ -341,7 +365,7 @@ export const Game: React.FC = () => {
 
         {uiState.status === 'playing' && (
           <HUD
-            score={uiState.score}
+            score={uiState.distance}
             coins={uiState.coins}
             highScore={uiState.highScore}
             gameSpeed={uiState.gameSpeed}
@@ -350,7 +374,7 @@ export const Game: React.FC = () => {
 
         {uiState.status === 'gameover' && (
           <GameOverScreen
-            score={uiState.score}
+            score={uiState.distance}
             coins={uiState.coins}
             highScore={uiState.highScore}
             isNewHighScore={uiState.isNewHighScore}
